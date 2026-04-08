@@ -121,12 +121,19 @@
       const [newEqName, setNewEqName] = useState('');
       const [newEqImage, setNewEqImage] = useState('');
       const [newEqQty, setNewEqQty] = useState(1);
+      const [newEqUnit, setNewEqUnit] = useState('개'); // 단위 추가
       const [newEqTracked, setNewEqTracked] = useState(true);
       const [adminPwdInput, setAdminPwdInput] = useState('');
       
+      // Edit Equipment States
       const [editingEqId, setEditingEqId] = useState(null);
+      const [editEqName, setEditEqName] = useState('');
       const [editEqQty, setEditEqQty] = useState('');
+      const [editEqUnit, setEditEqUnit] = useState('개');
       const [sortBy, setSortBy] = useState('latest');
+      
+      // Image Edit Modal State
+      const [imageModal, setImageModal] = useState({ show: false, eqId: null, currentImage: '' });
       
       // Admin Password Management States
       const [actualAdminPwd, setActualAdminPwd] = useState('0000');
@@ -214,12 +221,12 @@
 
       const seedInitialEquipments = async () => {
         const initialData = [
-          { name: '농구공', imageUrl: '🏀', totalQuantity: 15, isQuantityTracked: true },
-          { name: '축구공', imageUrl: '⚽', totalQuantity: 12, isQuantityTracked: true },
-          { name: '배구공', imageUrl: '🏐', totalQuantity: 10, isQuantityTracked: true },
-          { name: '뜀틀 세트', imageUrl: '🤸', totalQuantity: 2, isQuantityTracked: false },
-          { name: '줄넘기', imageUrl: '➰', totalQuantity: 30, isQuantityTracked: true },
-          { name: '팀 조끼 (세트)', imageUrl: '🎽', totalQuantity: 4, isQuantityTracked: true }
+          { name: '농구공', imageUrl: '🏀', totalQuantity: 15, isQuantityTracked: true, unit: '개' },
+          { name: '축구공', imageUrl: '⚽', totalQuantity: 12, isQuantityTracked: true, unit: '개' },
+          { name: '배구공', imageUrl: '🏐', totalQuantity: 10, isQuantityTracked: true, unit: '개' },
+          { name: '뜀틀 세트', imageUrl: '🤸', totalQuantity: 2, isQuantityTracked: false, unit: '세트' },
+          { name: '줄넘기', imageUrl: '➰', totalQuantity: 30, isQuantityTracked: true, unit: '개' },
+          { name: '팀 조끼', imageUrl: '🎽', totalQuantity: 4, isQuantityTracked: true, unit: '세트' }
         ];
         for (const item of initialData) {
           await addDoc(getEquipmentsRef(), { ...item, createdAt: serverTimestamp() });
@@ -258,7 +265,7 @@
         return eq.totalQuantity - borrowedCount;
       };
 
-      const handleImageChange = (e) => {
+      const handleImageChange = (e, setterFunc) => {
         const file = e.target.files[0];
         if (!file) return;
 
@@ -289,7 +296,7 @@
             ctx.drawImage(img, 0, 0, width, height);
             
             const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            setNewEqImage(dataUrl);
+            setterFunc(dataUrl);
           };
           img.src = event.target.result;
         };
@@ -366,19 +373,21 @@
       };
 
       const handleAddEquipment = async () => {
-        if (!newEqName.trim()) return;
+        if (!newEqName.trim()) return showAlert('물품 이름을 입력해주세요.');
         try {
           setLoading(true);
           await addDoc(getEquipmentsRef(), {
             name: newEqName.trim(),
             imageUrl: newEqImage || '📦',
             totalQuantity: Number(newEqQty),
+            unit: newEqUnit,
             isQuantityTracked: newEqTracked,
             createdAt: serverTimestamp()
           });
           setNewEqName('');
           setNewEqImage('');
           setNewEqQty(1);
+          setNewEqUnit('개');
           showToast('새 물품이 추가되었습니다!'); 
         } catch (error) {
           console.error("Add equipment error:", error);
@@ -403,18 +412,21 @@
         });
       };
 
-      const handleUpdateQuantity = async (id) => {
-        if (Number(editEqQty) < 1) return showAlert('수량은 1개 이상이어야 합니다.');
+      const handleUpdateEquipment = async (id) => {
+        if (!editEqName.trim()) return showAlert('물품 이름을 입력해주세요.');
+        if (Number(editEqQty) < 1) return showAlert('수량은 1 이상이어야 합니다.');
         try {
           setLoading(true);
           await updateDoc(doc(db, 'equipments', id), {
-            totalQuantity: Number(editEqQty)
+            name: editEqName.trim(),
+            totalQuantity: Number(editEqQty),
+            unit: editEqUnit
           });
-          showToast('수량이 수정되었습니다.');
+          showToast('물품 정보가 수정되었습니다.');
           setEditingEqId(null);
         } catch (error) {
           console.error("Update error:", error);
-          showAlert('수량 수정 중 오류가 발생했습니다.');
+          showAlert('정보 수정 중 오류가 발생했습니다.');
         } finally {
           setLoading(false);
         }
@@ -644,7 +656,7 @@
                         </div>
                         <h3 className={`font-bold text-lg md:text-xl text-center ${isUnavailable ? 'text-gray-500' : 'text-gray-800'}`}>{eq.name}</h3>
                         <p className={`text-sm md:text-base mt-1 ${isUnavailable ? 'text-gray-400' : 'text-green-600 font-medium'}`}>
-                          {isUnavailable ? '대여 불가' : `남은 수량: ${available}개`}
+                          {isUnavailable ? '대여 불가' : `남은 수량: ${available}${eq.unit || '개'}`}
                         </p>
                       </button>
                     );
@@ -681,7 +693,7 @@
                         </div>
                         <div>
                           <h4 className="font-bold text-lg md:text-xl text-gray-800">{eq?.name}</h4>
-                          <p className="text-sm text-gray-500 mt-1">최대 {available}개 가능</p>
+                          <p className="text-sm text-gray-500 mt-1">최대 {available}{eq?.unit || '개'} 가능</p>
                         </div>
                       </div>
 
@@ -693,7 +705,9 @@
                           >
                             <Minus size={24} />
                           </button>
-                          <span className="w-12 text-center font-bold text-xl">{qty}</span>
+                          <span className="w-12 text-center font-bold text-xl flex items-center justify-center gap-1">
+                            {qty}<span className="text-sm text-gray-500 font-normal">{eq?.unit || '개'}</span>
+                          </span>
                           <button 
                             onClick={() => setSelectedItems(prev => ({ ...prev, [eqId]: Math.min(available, qty + 1) }))}
                             className="p-3 text-gray-600 hover:bg-white hover:shadow-sm rounded-lg transition-all"
@@ -703,7 +717,7 @@
                         </div>
                       ) : (
                         <div className="bg-green-50 text-green-700 font-bold px-4 py-2 rounded-lg text-sm border border-green-100">
-                          수량 입력 없음 (1)
+                          수량 입력 없음 (1{eq?.unit || '개'})
                         </div>
                       )}
                     </div>
@@ -798,7 +812,7 @@
                       return (
                         <li key={eqId} className="flex justify-between items-center bg-white/60 p-2 rounded-lg">
                           <span className="font-medium">{eq?.name}</span>
-                          <span className="font-bold bg-green-100 px-3 py-1 rounded-full">{qty}개</span>
+                          <span className="font-bold bg-green-100 px-3 py-1 rounded-full">{qty}{eq?.unit || '개'}</span>
                         </li>
                       );
                     })}
@@ -862,7 +876,7 @@
                           <div className="flex-1">
                             <div className="flex justify-between items-start mb-1">
                               <h4 className="font-bold text-lg text-gray-800">{eq?.name || '알 수 없는 물품'}</h4>
-                              <span className="font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded text-sm">{tx.borrowedQuantity}개</span>
+                              <span className="font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded text-sm">{tx.borrowedQuantity}{eq?.unit || '개'}</span>
                             </div>
                             <div className="flex items-center text-sm text-gray-500">
                               <User size={14} className="mr-1" /> {tx.borrowerName}
@@ -882,7 +896,7 @@
                       onClick={handleReturnSubmit}
                       className="w-full bg-red-500 disabled:bg-gray-300 text-white font-bold text-lg py-4 rounded-xl shadow-lg transition-colors"
                     >
-                      {loading ? '처리중...' : `${selectedTransactions.length}개 반납하기`}
+                      {loading ? '처리중...' : `${selectedTransactions.length}건 반납하기`}
                     </button>
                   </div>
                 )}
@@ -915,7 +929,7 @@
                     </div>
                     <div className="text-left">
                       <h3 className="text-lg font-bold text-gray-800">물품 마스터 관리</h3>
-                      <p className="text-sm text-gray-500">새 물품 추가, 수량 수정, 이미지 등록</p>
+                      <p className="text-sm text-gray-500">새 물품 추가, 정보 수정, 목록 정렬</p>
                     </div>
                   </div>
                   <ChevronLeft className="text-gray-400 rotate-180" />
@@ -989,26 +1003,22 @@
                           />
                         </div>
                         <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center px-4 rounded-lg font-medium transition-colors border border-gray-200">
-                          <Camera size={20} className="mr-2" /> 사진업로드
-                          <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                          <Camera size={20} className="mr-2" /> 사진선택
+                          <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, setNewEqImage)} className="hidden" />
                         </label>
                       </div>
                       
-                      {/* 빠른 이모지 선택 UI 추가 */}
-                      <div className="mt-2">
-                        <p className="text-xs text-gray-500 mb-2">💡 빠른 이모지</p>
-                        <div className="flex flex-wrap gap-2">
-                          {['🏀', '⚽', '🏐', '⚾', '🎾', '🏸', '🏓', '🤸', '🎽', '➰', '🥊', '📦'].map(emoji => (
-                            <button
-                              key={emoji}
-                              type="button"
-                              onClick={() => setNewEqImage(emoji)}
-                              className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-lg text-2xl transition-colors border border-gray-200"
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {['🏀', '⚽', '🏐', '⚾', '🎾', '🏸', '🏓', '🤸', '🎽', '➰', '🥊', '📦'].map(emoji => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => setNewEqImage(emoji)}
+                            className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-lg text-2xl transition-colors border border-gray-200"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
                       </div>
 
                       {newEqImage && newEqImage.startsWith('data:image') && (
@@ -1018,7 +1028,7 @@
                       )}
                     </div>
 
-                    <div className="flex gap-4">
+                    <div className="flex gap-2">
                       <div className="flex-1">
                         <label className="block text-sm font-bold text-gray-600 mb-1">총 수량</label>
                         <input 
@@ -1029,18 +1039,28 @@
                           className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none"
                         />
                       </div>
-                      <div className="flex-1 flex items-end pb-2">
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            checked={newEqTracked}
-                            onChange={(e) => setNewEqTracked(e.target.checked)}
-                            className="w-5 h-5 rounded text-green-500 focus:ring-green-500"
-                          />
-                          <span className="text-sm font-bold text-gray-600">수량 관리 필요</span>
-                        </label>
+                      <div className="w-24">
+                        <label className="block text-sm font-bold text-gray-600 mb-1">단위</label>
+                        <select 
+                          value={newEqUnit} 
+                          onChange={(e) => setNewEqUnit(e.target.value)}
+                          className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none"
+                        >
+                          <option value="개">개</option>
+                          <option value="세트">세트</option>
+                        </select>
                       </div>
                     </div>
+                    
+                    <label className="flex items-center space-x-2 cursor-pointer mt-1">
+                      <input 
+                        type="checkbox" 
+                        checked={newEqTracked}
+                        onChange={(e) => setNewEqTracked(e.target.checked)}
+                        className="w-5 h-5 rounded text-green-500 focus:ring-green-500"
+                      />
+                      <span className="text-sm font-bold text-gray-600">수량 조절 기능 사용 (해제 시 무조건 1{newEqUnit})</span>
+                    </label>
 
                     <button 
                       onClick={handleAddEquipment}
@@ -1055,67 +1075,91 @@
 
                 {/* 등록된 물품 목록 */}
                 <div>
-                  <div className="flex justify-between items-center mb-4">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-2">
                     <h3 className="text-lg font-bold text-gray-800 flex items-center">
                       <Package size={20} className="mr-2" /> 등록된 물품 목록
                     </h3>
                     <select 
                       value={sortBy} 
                       onChange={(e) => setSortBy(e.target.value)}
-                      className="bg-white border border-gray-200 rounded-lg p-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="bg-white border border-gray-200 rounded-lg p-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500 w-full sm:w-auto"
                     >
                       <option value="latest">최신순</option>
                       <option value="oldest">오래된순</option>
                       <option value="name">이름순 (가나다)</option>
                     </select>
                   </div>
+                  
                   <div className="space-y-3">
                     {sortedEquipments.map(eq => (
-                      <div key={eq.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
-                        <div className="flex items-center flex-1">
-                          <div className="w-12 h-12 flex items-center justify-center text-3xl bg-gray-50 rounded-lg mr-4 overflow-hidden shrink-0">
-                            {renderIcon(eq.imageUrl, eq.name)}
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-bold text-gray-800">{eq.name}</h4>
-                            {editingEqId === eq.id ? (
-                              <div className="flex items-center mt-2 gap-2">
-                                <span className="text-sm text-gray-600">수량:</span>
-                                <input 
-                                  type="number" 
-                                  min="1"
-                                  value={editEqQty}
-                                  onChange={(e) => setEditEqQty(e.target.value)}
-                                  className="w-16 border border-gray-300 rounded p-1 text-sm focus:outline-none focus:border-green-500"
-                                />
-                                <button onClick={() => handleUpdateQuantity(eq.id)} className="bg-green-500 text-white px-3 py-1 rounded text-sm font-bold ml-1">저장</button>
-                                <button onClick={() => setEditingEqId(null)} className="bg-gray-200 text-gray-700 px-3 py-1 rounded text-sm font-bold">취소</button>
+                      <div key={eq.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        
+                        {/* 편집 모드일 때 */}
+                        {editingEqId === eq.id ? (
+                          <div className="flex flex-col gap-3 w-full bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <div>
+                              <label className="block text-xs font-bold text-gray-500 mb-1">물품 이름</label>
+                              <input type="text" value={editEqName} onChange={e => setEditEqName(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-green-500 outline-none" />
+                            </div>
+                            <div className="flex gap-2">
+                              <div className="flex-1">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">총 수량</label>
+                                <input type="number" min="1" value={editEqQty} onChange={e => setEditEqQty(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-green-500 outline-none" />
                               </div>
-                            ) : (
-                              <p className="text-xs text-gray-500 mt-1">총 수량: {eq.totalQuantity}개 {eq.isQuantityTracked ? '(수량관리O)' : '(수량관리X)'}</p>
-                            )}
+                              <div className="w-24">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">단위</label>
+                                <select value={editEqUnit} onChange={e => setEditEqUnit(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm focus:border-green-500 outline-none">
+                                  <option value="개">개</option>
+                                  <option value="세트">세트</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div className="flex justify-end gap-2 mt-2">
+                              <button onClick={() => setEditingEqId(null)} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-300">취소</button>
+                              <button onClick={() => handleUpdateEquipment(eq.id)} className="bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-green-600">저장</button>
+                            </div>
                           </div>
-                        </div>
-                        {editingEqId !== eq.id && (
-                          <div className="flex items-center gap-1">
-                            <button 
-                              onClick={() => {
-                                setEditingEqId(eq.id);
-                                setEditEqQty(eq.totalQuantity);
-                              }}
-                              className="text-blue-400 hover:text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors"
-                              title="수량 수정"
-                            >
-                              <Edit2 size={20} />
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteEquipment(eq.id)}
-                              className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"
-                              title="삭제하기"
-                            >
-                              <Trash2 size={20} />
-                            </button>
-                          </div>
+                        ) : (
+                          // 일반 보기 모드일 때
+                          <>
+                            <div className="flex items-center flex-1">
+                              <div 
+                                className="relative w-12 h-12 flex items-center justify-center text-3xl bg-gray-50 rounded-lg mr-4 overflow-hidden shrink-0 cursor-pointer group border border-gray-200"
+                                onClick={() => setImageModal({ show: true, eqId: eq.id, currentImage: eq.imageUrl || '' })}
+                                title="사진/이모지 변경"
+                              >
+                                {renderIcon(eq.imageUrl, eq.name)}
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Camera size={18} className="text-white" />
+                                </div>
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="font-bold text-gray-800">{eq.name}</h4>
+                                <p className="text-xs text-gray-500 mt-1">총 수량: {eq.totalQuantity}{eq.unit || '개'} {eq.isQuantityTracked ? '' : '(수량고정)'}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-end gap-1 shrink-0">
+                              <button 
+                                onClick={() => {
+                                  setEditingEqId(eq.id);
+                                  setEditEqName(eq.name);
+                                  setEditEqQty(eq.totalQuantity);
+                                  setEditEqUnit(eq.unit || '개');
+                                }}
+                                className="text-blue-400 hover:text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors"
+                                title="수정"
+                              >
+                                <Edit2 size={20} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteEquipment(eq.id)}
+                                className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                                title="삭제"
+                              >
+                                <Trash2 size={20} />
+                              </button>
+                            </div>
+                          </>
                         )}
                       </div>
                     ))}
@@ -1144,7 +1188,7 @@
                         <div key={tx.id} className={`p-4 rounded-xl border ${isReturned ? 'bg-gray-50 border-gray-200' : 'bg-white border-green-200 shadow-sm'}`}>
                           <div className="flex justify-between items-start mb-2">
                             <div className="font-bold text-gray-800">
-                              {eq?.name || '삭제된 물품'} <span className="text-sm font-normal text-gray-500 ml-1">x {tx.borrowedQuantity}</span>
+                              {eq?.name || '삭제된 물품'} <span className="text-sm font-normal text-gray-500 ml-1">x {tx.borrowedQuantity}{eq?.unit || '개'}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className={`text-xs font-bold px-2 py-1 rounded ${isReturned ? 'bg-gray-200 text-gray-600' : 'bg-green-100 text-green-700'}`}>
@@ -1255,7 +1299,80 @@
                     }}
                     className="flex-1 bg-red-500 text-white font-bold py-3.5 rounded-xl hover:bg-red-600 active:scale-95 transition-all"
                   >
-                    삭제
+                    확인
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* --- IMAGE EDIT MODAL --- */}
+          {imageModal.show && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+              <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">사진 / 아이콘 변경</h3>
+                
+                <div className="flex gap-2 mb-4">
+                  <div className="flex-1 relative">
+                    <input 
+                      type="text" 
+                      value={imageModal.currentImage}
+                      onChange={(e) => setImageModal(prev => ({ ...prev, currentImage: e.target.value }))}
+                      placeholder="이모지 입력 또는 사진 선택"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 focus:ring-2 focus:ring-green-500 outline-none"
+                    />
+                  </div>
+                  <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center px-3 rounded-lg font-medium transition-colors border border-gray-200 shrink-0">
+                    <Camera size={20} />
+                    <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, (url) => setImageModal(prev => ({ ...prev, currentImage: url })))} className="hidden" />
+                  </label>
+                </div>
+
+                <div className="mb-4 flex flex-wrap gap-2 justify-center">
+                  {['🏀', '⚽', '🏐', '⚾', '🎾', '🏸', '🏓', '🤸', '🎽', '➰', '🥊', '📦'].map(emoji => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => setImageModal(prev => ({ ...prev, currentImage: emoji }))}
+                      className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-lg text-2xl transition-colors border border-gray-200"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+
+                {imageModal.currentImage && imageModal.currentImage.startsWith('data:image') && (
+                  <div className="mb-4 w-24 h-24 mx-auto rounded-lg border border-gray-200 overflow-hidden">
+                    <img src={imageModal.currentImage} alt="preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setImageModal({ show: false, eqId: null, currentImage: '' })}
+                    className="flex-1 bg-gray-200 text-gray-800 font-bold py-3.5 rounded-xl hover:bg-gray-300 active:scale-95 transition-all"
+                  >
+                    취소
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      try {
+                        setLoading(true);
+                        await updateDoc(doc(db, 'equipments', imageModal.eqId), {
+                          imageUrl: imageModal.currentImage || '📦'
+                        });
+                        showToast('사진이 변경되었습니다!');
+                        setImageModal({ show: false, eqId: null, currentImage: '' });
+                      } catch (error) {
+                        console.error(error);
+                        showAlert('사진 변경 중 오류가 발생했습니다.');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="flex-1 bg-green-500 text-white font-bold py-3.5 rounded-xl hover:bg-green-600 active:scale-95 transition-all"
+                  >
+                    저장
                   </button>
                 </div>
               </div>
