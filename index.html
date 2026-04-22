@@ -130,7 +130,7 @@
       const [editEqName, setEditEqName] = useState('');
       const [editEqQty, setEditEqQty] = useState('');
       const [editEqUnit, setEditEqUnit] = useState('개');
-      const [sortBy, setSortBy] = useState('latest');
+      const [sortBy, setSortBy] = useState('name');
       
       // Image Edit Modal State
       const [imageModal, setImageModal] = useState({ show: false, eqId: null, currentImage: '' });
@@ -698,23 +698,47 @@
                       </div>
 
                       {eq?.isQuantityTracked ? (
-                        <div className="flex items-center bg-gray-50 rounded-xl p-1 border border-gray-200">
-                          <button 
-                            onClick={() => setSelectedItems(prev => ({ ...prev, [eqId]: Math.max(1, qty - 1) }))}
-                            className="p-3 text-gray-600 hover:bg-white hover:shadow-sm rounded-lg transition-all"
-                          >
-                            <Minus size={24} />
-                          </button>
-                          <span className="w-12 text-center font-bold text-xl flex items-center justify-center gap-1">
-                            {qty}<span className="text-sm text-gray-500 font-normal">{eq?.unit || '개'}</span>
-                          </span>
-                          <button 
-                            onClick={() => setSelectedItems(prev => ({ ...prev, [eqId]: Math.min(available, qty + 1) }))}
-                            className="p-3 text-gray-600 hover:bg-white hover:shadow-sm rounded-lg transition-all"
-                          >
-                            <Plus size={24} />
-                          </button>
-                        </div>
+<div className="flex items-center bg-gray-50 rounded-xl p-1 border border-gray-200">
+  <button 
+    onClick={() => setSelectedItems(prev => ({ ...prev, [eqId]: Math.max(1, qty - 1) }))}
+    className="p-3 text-gray-600 hover:bg-white hover:shadow-sm rounded-lg transition-all"
+  >
+    <Minus size={24} />
+  </button>
+
+  <div className="flex items-center gap-1 px-2">
+    <input
+      type="number"
+      min="1"
+      max={available}
+      value={qty}
+      onChange={(e) => {
+        let value = Number(e.target.value);
+        if (e.target.value === '') {
+          value = '';
+        } else {
+          value = Math.max(1, Math.min(available, value));
+        }
+        setSelectedItems(prev => ({ ...prev, [eqId]: value }));
+      }}
+      onBlur={(e) => {
+        let value = Number(e.target.value);
+        if (!value || value < 1) value = 1;
+        if (value > available) value = available;
+        setSelectedItems(prev => ({ ...prev, [eqId]: value }));
+      }}
+      className="w-16 text-center font-bold text-xl bg-white border border-gray-200 rounded-lg py-2 outline-none focus:ring-2 focus:ring-green-500"
+    />
+    <span className="text-sm text-gray-500 font-normal">{eq?.unit || '개'}</span>
+  </div>
+
+  <button 
+    onClick={() => setSelectedItems(prev => ({ ...prev, [eqId]: Math.min(available, qty + 1) }))}
+    className="p-3 text-gray-600 hover:bg-white hover:shadow-sm rounded-lg transition-all"
+  >
+    <Plus size={24} />
+  </button>
+</div>
                       ) : (
                         <div className="bg-green-50 text-green-700 font-bold px-4 py-2 rounded-lg text-sm border border-green-100">
                           수량 입력 없음 (1{eq?.unit || '개'})
