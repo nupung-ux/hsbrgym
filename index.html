@@ -25,16 +25,16 @@
   <!-- React 앱이 표시될 공간 -->
   <div id="root"></div>
 
-  <!-- React 코드 작성 영역 (Firebase 모듈 import를 위해 data-type="module" 사용) -->
+  <!-- React 코드 작성 영역 -->
   <script type="text/babel" data-type="module">
     const { useState, useEffect, useMemo } = React;
 
     // --- Firebase 모듈 Import (CDN 사용) ---
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
     import { getFirestore, collection, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, deleteDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
-    // --- Icon Components (내장 SVG로 완전 교체) ---
+    // --- Icon Components ---
     const Icon = ({ name, size = 24, className = '', strokeWidth = 2 }) => {
       const paths = {
         Check: <polyline points="20 6 9 17 4 12" />,
@@ -123,17 +123,20 @@
       const [newEqName, setNewEqName] = useState('');
       const [newEqImage, setNewEqImage] = useState('');
       const [newEqQty, setNewEqQty] = useState(1);
-      const [newEqUnit, setNewEqUnit] = useState('개'); // 단위 추가
+      const [newEqUnit, setNewEqUnit] = useState('개');
       const [newEqTracked, setNewEqTracked] = useState(true);
       const [adminPwdInput, setAdminPwdInput] = useState('');
       
-      // Edit Equipment States
+      // Edit & Sort/Search States
       const [editingEqId, setEditingEqId] = useState(null);
       const [editEqName, setEditEqName] = useState('');
       const [editEqQty, setEditEqQty] = useState('');
       const [editEqUnit, setEditEqUnit] = useState('개');
       const [sortBy, setSortBy] = useState('name');
       const [searchQuery, setSearchQuery] = useState('');
+      
+      // 💡 새롭게 추가된 대여 기록 필터 상태 ('all', 'borrowing', 'returned')
+      const [historyFilter, setHistoryFilter] = useState('all');
       
       // Image Edit Modal State
       const [imageModal, setImageModal] = useState({ show: false, eqId: null, currentImage: '' });
@@ -244,7 +247,6 @@
       const sortedEquipments = useMemo(() => {
         let result = [...equipments];
         
-        // 검색어가 있으면 필터링
         if (searchQuery.trim()) {
           result = result.filter(eq => eq.name.toLowerCase().includes(searchQuery.toLowerCase().trim()));
         }
@@ -621,7 +623,7 @@
             {view === 'borrow_select' && (
               <div className="p-4 md:p-6">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 px-1 gap-2">
-                  <p className="text-sm md:text-base font-medium text-gray-500">대여할 물품을 선택해주세요 (다중 선택 가능)</p>
+                  <p className="text-sm md:text-base font-medium text-gray-500">대여할 물품을 선택해주세요</p>
                   <select 
                     value={sortBy} 
                     onChange={(e) => setSortBy(e.target.value)}
@@ -795,7 +797,6 @@
                 <div className="fixed bottom-0 left-0 right-0 max-w-3xl mx-auto p-4 bg-white/90 backdrop-blur-md border-t border-gray-100 z-10">
                   <button
                     onClick={() => {
-                      // 다음 단계로 넘어가기 전, 비어있거나 잘못된 수량을 1로 보정합니다.
                       const sanitizedItems = { ...selectedItems };
                       for (const id in sanitizedItems) {
                         const q = Number(sanitizedItems[id]);
@@ -1280,9 +1281,39 @@
                   <History size={20} className="mr-2" /> 전체 대여/반납 기록
                 </h3>
                 
+                {/* 👇 새롭게 추가된 상태 필터 탭 (버튼 3개) 👇 */}
+                <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100 mb-4">
+                  <button
+                    onClick={() => setHistoryFilter('all')}
+                    className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${historyFilter === 'all' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    전체보기
+                  </button>
+                  <button
+                    onClick={() => setHistoryFilter('borrowing')}
+                    className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${historyFilter === 'borrowing' ? 'bg-orange-500 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    대여중
+                  </button>
+                  <button
+                    onClick={() => setHistoryFilter('returned')}
+                    className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${historyFilter === 'returned' ? 'bg-green-500 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    반납완료
+                  </button>
+                </div>
+                {/* 👆 필터 탭 끝 👆 */}
+
                 <div className="space-y-3">
-                  {[...transactions]
+                  {transactions
                     .sort((a, b) => b.timestamp - a.timestamp)
+                    .filter((tx) => {
+                      if (historyFilter === 'all') return true;
+                      const isReturned = tx.status === 'returned';
+                      if (historyFilter === 'borrowing') return !isReturned; 
+                      if (historyFilter === 'returned') return isReturned;
+                      return true;
+                    })
                     .map(tx => {
                       const eq = equipments.find(e => e.id === tx.equipmentId);
                       const isReturned = tx.status === 'returned';
@@ -1318,9 +1349,13 @@
                         </div>
                       );
                   })}
-                  {transactions.length === 0 && (
-                     <div className="text-center py-10 text-gray-500 bg-white rounded-xl border border-gray-100">
-                        기록이 없습니다.
+                  
+                  {transactions.filter(tx => {
+                    if (historyFilter === 'all') return true;
+                    return historyFilter === 'borrowing' ? tx.status !== 'returned' : tx.status === 'returned';
+                  }).length === 0 && (
+                     <div className="text-center py-10 text-gray-500 bg-white rounded-xl border border-gray-100 shadow-sm">
+                        해당하는 기록이 없습니다.
                      </div>
                   )}
                 </div>
