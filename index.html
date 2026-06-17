@@ -14,6 +14,13 @@
   
   <!-- Babel (JSX 컴파일러) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- 💡 핵심 에러 해결: Babel이 react/jsx-runtime을 찾지 않도록 클래식 모드 강제 적용 -->
+  <script>
+    Babel.registerPreset('react-classic', {
+      presets: [[Babel.availablePresets['react'], { runtime: 'classic' }]]
+    });
+  </script>
 
   <style>
     /* 기본 폰트 및 모바일 터치 하이라이트 제거 */
@@ -25,8 +32,8 @@
   <!-- React 앱이 표시될 공간 -->
   <div id="root"></div>
 
-  <!-- React 코드 작성 영역 -->
-  <script type="text/babel" data-type="module">
+  <!-- 💡 수정됨: data-presets="react-classic"을 사용하여 안정적인 렌더링 적용 -->
+  <script type="text/babel" data-type="module" data-presets="react-classic">
     const { useState, useEffect, useMemo } = React;
 
     // --- Firebase 모듈 Import (CDN 사용) ---
@@ -135,7 +142,6 @@
       const [sortBy, setSortBy] = useState('name');
       const [searchQuery, setSearchQuery] = useState('');
       
-      // 💡 새롭게 추가된 대여 기록 필터 상태 ('all', 'borrowing', 'returned')
       const [historyFilter, setHistoryFilter] = useState('all');
       
       // Image Edit Modal State
@@ -629,9 +635,9 @@
                     onChange={(e) => setSortBy(e.target.value)}
                     className="bg-white border border-gray-200 rounded-lg p-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500 w-full sm:w-auto"
                   >
-                    <option value="latest">최신순</option>
-                    <option value="oldest">오래된순</option>
                     <option value="name">이름순 (가나다)</option>
+                    <option value="latest">최신 등록순</option>
+                    <option value="oldest">오래된 등록순</option>
                   </select>
                 </div>
 
